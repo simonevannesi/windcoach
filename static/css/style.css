@@ -1,0 +1,79 @@
+/* WindCoach Pro - High Contrast Styling */
+
+/* Sunlight Mode (Modalità Piena Luce / Sole sul Gommone) */
+body.sunlight-mode {
+    background-color: #f1f5f9 !important;
+    color: #000000 !important;
+}
+
+body.sunlight-mode header {
+    background-color: #ffffff !important;
+    border-color: #94a3b8 !important;
+}
+
+body.sunlight-mode .bg-slate-900 {
+    background-color: #ffffff !important;
+    border-color: #94a3b8 !important;
+    box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -2px rgba(0, 0, 0, 0.1) !important;
+}
+
+body.sunlight-mode .bg-slate-950,
+body.sunlight-mode .bg-slate-950\/70,
+body.sunlight-mode .bg-slate-950\/60,
+body.sunlight-mode .bg-slate-950\/50 {
+    background-color: #e2e8f0 !important;
+    border-color: #cbd5e1 !important;
+}
+
+body.sunlight-mode .text-white {
+    color: #000000 !important;
+}
+
+body.sunlight-mode .text-slate-200,
+body.sunlight-mode .text-slate-300 {
+    color: #0f172a !important;
+}
+
+body.sunlight-mode .text-slate-400 {
+    color: #334155 !important;
+}
+
+body.sunlight-mode .bg-slate-800 {
+    background-color: #cbd5e1 !important;
+    border-color: #94a3b8 !important;
+    color: #000000 !important;
+}
+
+/* High contrast badges in Sunlight Mode */
+body.sunlight-mode .bg-emerald-500\/20 {
+    background-color: #10b981 !important;
+    color: #ffffff !important;
+}
+
+body.sunlight-mode .bg-rose-500\/20 {
+    background-color: #f43f5e !important;
+    color: #ffffff !important;
+}
+
+body.sunlight-mode .bg-amber-500\/20 {
+    background-color: #f59e0b !important;
+    color: #000000 !important;
+}
+
+/* Smooth Needle & Arc */
+#compass-needle, #compass-oscillation-arc, #compass-axis-line {
+    transition: all 0.5s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+/* Scrollbar */
+::-webkit-scrollbar {
+    width: 6px;
+    height: 6px;
+}
+::-webkit-scrollbar-track {
+    background: #090d16;
+}
+::-webkit-scrollbar-thumb {
+    background: #334155;
+    border-radius: 3px;
+}

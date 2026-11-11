@@ -1,0 +1,195 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>WindCoach Pro</title>
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = {
+            darkMode: 'class',
+            theme: {
+                extend: {
+                    colors: {
+                        navy: {
+                            900: '#090d16',
+                            950: '#030712'
+                        }
+                    }
+                }
+            }
+        }
+    </script>
+    <!-- Chart.js -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <!-- Custom CSS -->
+    <link rel="stylesheet" href="/static/css/style.css" />
+</head>
+<body class="bg-slate-950 text-slate-100 min-h-screen font-sans antialiased pb-6 transition-colors duration-200">
+
+    <!-- BARRA SUPERIORE MINIMALE -->
+    <header class="border-b border-slate-800 bg-slate-900 sticky top-0 z-50 px-3 py-2">
+        <div class="max-w-3xl mx-auto flex items-center justify-between gap-2">
+            <!-- File attivo -->
+            <div class="flex items-center gap-2 truncate">
+                <span class="text-cyan-400 font-black text-xs tracking-wider shrink-0">FILE:</span>
+                <span id="active-file-label" class="font-mono text-xs sm:text-sm font-black text-white bg-slate-800 px-2 py-0.5 rounded border border-slate-700 truncate">
+                    Ricerca...
+                </span>
+                <span id="record-count-badge" class="text-[11px] font-mono text-slate-400 shrink-0">-- r</span>
+            </div>
+
+            <!-- Controlli (Sync & Sole) -->
+            <div class="flex items-center gap-2 shrink-0">
+                <div class="flex items-center gap-1.5 bg-slate-800 px-2 py-1 rounded font-mono text-[11px] text-cyan-300 border border-slate-700">
+                    <span class="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>
+                    <span id="countdown-badge">30s</span>
+                </div>
+                <button id="btn-theme-toggle" class="bg-amber-500/20 text-amber-300 border border-amber-500/40 px-2.5 py-1 rounded font-bold text-xs active:scale-95">
+                    SOLE
+                </button>
+                <button id="btn-sync-now" class="bg-slate-800 hover:bg-slate-700 text-slate-200 px-2.5 py-1 rounded border border-slate-700 text-xs font-bold active:scale-95">
+                    SYNC
+                </button>
+            </div>
+        </div>
+    </header>
+
+    <!-- CONTENUTO PRINCIPALE -->
+    <main class="max-w-3xl mx-auto px-3 py-3 space-y-3">
+
+        <!-- SELETTORE FINESTRA TEMPO (5' - 15' - 30' - 1h) -->
+        <div class="bg-slate-900 border border-slate-800 rounded-xl p-2 flex items-center justify-between gap-2">
+            <span class="text-xs font-bold uppercase tracking-wider text-slate-400 pl-1">Intervallo:</span>
+            <div class="grid grid-cols-4 gap-1.5 w-full max-w-sm">
+                <button class="time-btn py-2 rounded-lg font-black text-sm text-slate-400 hover:text-white bg-slate-950 border border-slate-800 text-center transition active:scale-95" data-min="5">
+                    5'
+                </button>
+                <button class="time-btn active py-2 rounded-lg font-black text-sm text-cyan-300 bg-slate-800 border border-cyan-500/40 text-center transition active:scale-95" data-min="15">
+                    15'
+                </button>
+                <button class="time-btn py-2 rounded-lg font-black text-sm text-slate-400 hover:text-white bg-slate-950 border border-slate-800 text-center transition active:scale-95" data-min="30">
+                    30'
+                </button>
+                <button class="time-btn py-2 rounded-lg font-black text-sm text-slate-400 hover:text-white bg-slate-950 border border-slate-800 text-center transition active:scale-95" data-min="60">
+                    1h
+                </button>
+            </div>
+        </div>
+
+        <!-- 1. INTENSITÀ: IN CALO O AUMENTO E DI QUANTO -->
+        <div class="bg-slate-900 border-2 border-slate-800 rounded-2xl p-4 shadow-sm">
+            <div class="flex justify-between items-center text-xs text-slate-400 font-bold uppercase tracking-wider mb-1">
+                <span>1. INTENSITÀ DEL VENTO</span>
+                <span class="text-xs font-mono text-slate-400">NODI (KN)</span>
+            </div>
+
+            <!-- Numero gigante e Badge Tendenza -->
+            <div class="flex items-baseline justify-between my-2">
+                <div class="flex items-baseline gap-2">
+                    <span id="curr-tws-val" class="text-5xl sm:text-6xl font-black text-white font-mono tracking-tight">--.-</span>
+                    <span class="text-xs font-bold text-slate-400">KN</span>
+                </div>
+                <div id="tws-trend-badge" class="text-sm sm:text-base font-black px-3.5 py-1.5 rounded-xl bg-slate-800 text-slate-300 border border-slate-700">
+                    --
+                </div>
+            </div>
+
+            <!-- Dettaglio intervallo (Media, Min, Max) -->
+            <div class="mt-3 pt-3 border-t border-slate-800/80 grid grid-cols-3 gap-2 text-center text-xs font-mono">
+                <div class="bg-slate-950/70 p-2 rounded-xl">
+                    <span class="text-[10px] block text-slate-400 font-bold font-sans">MEDIA</span>
+                    <span id="tws-avg-val" class="text-sm sm:text-base font-black text-cyan-300">--.- kn</span>
+                </div>
+                <div class="bg-slate-950/70 p-2 rounded-xl">
+                    <span class="text-[10px] block text-slate-400 font-bold font-sans">MIN (CALO)</span>
+                    <span id="tws-min-val" class="text-sm sm:text-base font-black text-blue-300">--.- kn</span>
+                </div>
+                <div class="bg-slate-950/70 p-2 rounded-xl">
+                    <span class="text-[10px] block text-slate-400 font-bold font-sans">MAX (RAFFICA)</span>
+                    <span id="tws-max-val" class="text-sm sm:text-base font-black text-amber-300">--.- kn</span>
+                </div>
+            </div>
+        </div>
+
+        <!-- 2. DIREZIONE: CAMBIO DIREZIONE E DI QUANTO -->
+        <div class="bg-slate-900 border-2 border-slate-800 rounded-2xl p-4 shadow-sm">
+            <div class="flex justify-between items-center text-xs text-slate-400 font-bold uppercase tracking-wider mb-1">
+                <span>2. DIREZIONE DEL VENTO</span>
+                <span id="latest-time-badge" class="font-mono text-cyan-400">--:--:-- UTC</span>
+            </div>
+
+            <!-- Numero gigante e Badge Rotazione -->
+            <div class="flex items-baseline justify-between my-2">
+                <div class="flex items-baseline gap-2">
+                    <span id="curr-twd-val" class="text-5xl sm:text-6xl font-black text-white font-mono tracking-tight">---°</span>
+                    <span class="text-xs font-bold text-slate-400">MAG</span>
+                </div>
+                <div id="twd-trend-badge" class="text-sm sm:text-base font-black px-3.5 py-1.5 rounded-xl bg-slate-800 text-slate-300 border border-slate-700">
+                    --
+                </div>
+            </div>
+
+            <!-- Dettaglio intervallo (Media, Cono SX-DX, Ampiezza) -->
+            <div class="mt-3 pt-3 border-t border-slate-800/80 grid grid-cols-3 gap-2 text-center text-xs font-mono">
+                <div class="bg-slate-950/70 p-2 rounded-xl">
+                    <span class="text-[10px] block text-slate-400 font-bold font-sans">MEDIA ASSE</span>
+                    <span id="mean-twd-val" class="text-sm sm:text-base font-black text-cyan-300">---°</span>
+                </div>
+                <div class="bg-slate-950/70 p-2 rounded-xl">
+                    <span class="text-[10px] block text-slate-400 font-bold font-sans">MAX SX — DX</span>
+                    <span id="min-max-twd-val" class="text-sm sm:text-base font-black text-white">---° — ---°</span>
+                </div>
+                <div class="bg-slate-950/70 p-2 rounded-xl">
+                    <span class="text-[10px] block text-slate-400 font-bold font-sans">CONO TOTALE</span>
+                    <span id="ampiezza-cono-val" class="text-sm sm:text-base font-black text-amber-300">--°</span>
+                </div>
+            </div>
+        </div>
+
+        <!-- 3. OSCILLAZIONI: TEMPO MEDIO ED ENTITÀ -->
+        <div class="bg-slate-900 border-2 border-slate-800 rounded-2xl p-4 shadow-sm">
+            <div class="text-xs text-slate-400 font-bold uppercase tracking-wider mb-2">
+                3. RITMO ED ENTITÀ OSCILLAZIONI
+            </div>
+
+            <div class="grid grid-cols-2 gap-3 my-2 text-center">
+                <!-- Tempo medio -->
+                <div class="bg-slate-950/80 border border-slate-800 p-3 rounded-xl">
+                    <span class="text-[11px] block font-bold text-slate-400 uppercase">Tempo medio tra salti</span>
+                    <span id="avg-phase-val" class="text-2xl sm:text-3xl font-black font-mono text-cyan-300 mt-1 block">~ -- min</span>
+                </div>
+                <!-- Entità media -->
+                <div class="bg-slate-950/80 border border-slate-800 p-3 rounded-xl">
+                    <span class="text-[11px] block font-bold text-slate-400 uppercase">Entità media salti</span>
+                    <span id="entita-media-val" class="text-2xl sm:text-3xl font-black font-mono text-amber-300 mt-1 block">±--°</span>
+                </div>
+            </div>
+
+            <!-- Stato attuale fase -->
+            <div class="mt-3 bg-slate-950 border border-slate-800/80 p-3 rounded-xl text-center">
+                <span id="status-phase-text" class="text-sm sm:text-base font-black text-white font-mono">
+                    Stato: in fase ... da ... min
+                </span>
+            </div>
+        </div>
+
+        <!-- GRAFICO ESSENZIALE (TWD & TWS) -->
+        <div class="bg-slate-900 border border-slate-800 rounded-2xl p-3 shadow-sm">
+            <div class="flex justify-between items-center text-xs text-slate-400 font-bold uppercase tracking-wider mb-2 px-1">
+                <span>Grafico Intervallo (TWD / TWS)</span>
+                <span class="text-[11px] font-mono text-slate-500">Campionamento 30s</span>
+            </div>
+            <div class="h-44 sm:h-48 relative">
+                <canvas id="chart-coach"></canvas>
+            </div>
+        </div>
+
+    </main>
+
+    <!-- Scripts -->
+    <script src="/static/js/charts.js"></script>
+    <script src="/static/js/app.js"></script>
+</body>
+</html>
