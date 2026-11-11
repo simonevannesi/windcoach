@@ -8,5 +8,7 @@ venv/
 .idea/
 .vscode/
 data/*.csv
+!data/latest.csv
+!data/files.json
 !data/.gitkeep
 scratch/

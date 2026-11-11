@@ -1,4 +1,4 @@
-// WindCoach Pro - High Legibility Controller for Coach on RIB
+// WindCoach Pro - High Legibility Controller for Coach on RIB (Dual Mode: Cloud Static & Local Server)
 
 class WindCoachApp {
     constructor() {
@@ -6,7 +6,11 @@ class WindCoachApp {
         this.pollIntervalSec = 30;
         this.countdownSec = 30;
         this.countdownTimer = null;
-        this.currentWindowMin = 15; // default to 15'
+        this.currentWindowMin = 15; // default 15'
+        this.cachedRecords = [];
+        this.activeFilename = "SsLog-31-10-2026.csv";
+        this.activeFileId = "1vAQBu_E5CDc2Rnh9dgUrkn-hqbPz7GgT";
+        this.isStaticMode = window.location.hostname.includes('github.io') || window.location.protocol === 'file:';
         
         this.init();
     }
@@ -26,6 +30,21 @@ class WindCoachApp {
             document.body.classList.add('sunlight-mode');
         }
 
+        // Restore cached records if any
+        try {
+            const savedData = localStorage.getItem('windcoach_csv_cache');
+            if (savedData && typeof TacticalWindClient !== 'undefined') {
+                this.cachedRecords = TacticalWindClient.parseCSV(savedData);
+                if (this.cachedRecords.length > 0) {
+                    const tactics = TacticalWindClient.calculateTactics(this.cachedRecords, this.currentWindowMin);
+                    tactics.active_file = localStorage.getItem('windcoach_active_file') || this.activeFilename;
+                    this.renderDashboard(tactics);
+                }
+            }
+        } catch (e) {
+            console.warn("Could not load local cache", e);
+        }
+
         // Initial fetch
         await this.loadAndSyncLatest();
         this.startCountdownLoop();
@@ -36,13 +55,24 @@ class WindCoachApp {
         const btnSync = document.getElementById('btn-sync-now');
         if (btnSync) btnSync.addEventListener('click', () => this.syncNow());
 
-        // Time window buttons (15', 30', 1h)
+        // File upload picker
+        const fileInput = document.getElementById('csv-file-input');
+        if (fileInput) {
+            fileInput.addEventListener('change', (e) => this.handleLocalFileUpload(e));
+        }
+
+        const btnUpload = document.getElementById('btn-upload-file');
+        if (btnUpload && fileInput) {
+            btnUpload.addEventListener('click', () => fileInput.click());
+        }
+
+        // Time window buttons (5', 15', 30', 1h)
         document.querySelectorAll('.time-btn').forEach(btn => {
             btn.addEventListener('click', () => {
                 this.currentWindowMin = parseFloat(btn.dataset.min);
                 localStorage.setItem('windcoach_window', this.currentWindowMin);
                 this.updateWindowButtonsUI();
-                this.fetchTactics();
+                this.recalculateOrFetch();
             });
         });
 
@@ -76,18 +106,28 @@ class WindCoachApp {
             this.countdownSec--;
             if (this.countdownSec <= 0) {
                 this.countdownSec = this.pollIntervalSec;
-                await this.fetchTactics();
+                await this.loadAndSyncLatest();
             }
             const badge = document.getElementById('countdown-badge');
             if (badge) badge.textContent = `${this.countdownSec}s`;
         }, 1000);
     }
 
+    async recalculateOrFetch() {
+        if (this.isStaticMode && this.cachedRecords.length > 0 && typeof TacticalWindClient !== 'undefined') {
+            const tactics = TacticalWindClient.calculateTactics(this.cachedRecords, this.currentWindowMin);
+            tactics.active_file = this.activeFilename;
+            this.renderDashboard(tactics);
+        } else {
+            await this.loadAndSyncLatest();
+        }
+    }
+
     async loadAndSyncLatest() {
-        try {
-            await this.fetchTactics();
-        } catch (e) {
-            console.error("Initial load error:", e);
+        if (this.isStaticMode) {
+            await this.fetchStaticData();
+        } else {
+            await this.fetchTacticsServer();
         }
     }
 
@@ -99,8 +139,10 @@ class WindCoachApp {
         }
 
         try {
-            await fetch('/api/sync/now', { method: 'POST' });
-            await this.fetchTactics();
+            if (!this.isStaticMode) {
+                await fetch('/api/sync/now', { method: 'POST' }).catch(() => {});
+            }
+            await this.loadAndSyncLatest();
             this.countdownSec = this.pollIntervalSec;
         } catch (e) {
             console.error("Sync error:", e);
@@ -112,21 +154,101 @@ class WindCoachApp {
         }
     }
 
-    async fetchTactics() {
+    async fetchStaticData() {
+        // Try reading known files index
+        try {
+            const fRes = await fetch('./data/files.json?_=' + Date.now());
+            if (fRes.ok) {
+                const fData = await fRes.json();
+                if (fData.active) this.activeFilename = fData.active;
+                if (fData.files && fData.files.length) {
+                    const activeObj = fData.files.find(f => f.name === this.activeFilename);
+                    if (activeObj && activeObj.id) this.activeFileId = activeObj.id;
+                }
+            }
+        } catch (e) {}
+
+        let csvText = null;
+
+        // 1. Try Google Drive Direct Download (CORS enabled)
+        if (this.activeFileId) {
+            try {
+                const driveUrl = `https://drive.usercontent.google.com/download?id=${this.activeFileId}&export=download`;
+                const res = await fetch(driveUrl, { cache: 'no-cache' });
+                if (res.ok) {
+                    const text = await res.text();
+                    if (text && text.length > 50 && text.includes(',')) {
+                        csvText = text;
+                    }
+                }
+            } catch (e) {
+                console.warn("Direct Drive download failed, falling back to local latest.csv", e);
+            }
+        }
+
+        // 2. Fallback to repository latest.csv
+        if (!csvText) {
+            try {
+                const localRes = await fetch('./data/latest.csv?_=' + Date.now());
+                if (localRes.ok) {
+                    csvText = await localRes.text();
+                }
+            } catch (e) {}
+        }
+
+        if (csvText && typeof TacticalWindClient !== 'undefined') {
+            try {
+                localStorage.setItem('windcoach_csv_cache', csvText);
+                localStorage.setItem('windcoach_active_file', this.activeFilename);
+            } catch (e) {}
+
+            this.cachedRecords = TacticalWindClient.parseCSV(csvText);
+            const tactics = TacticalWindClient.calculateTactics(this.cachedRecords, this.currentWindowMin);
+            tactics.active_file = this.activeFilename;
+            this.renderDashboard(tactics);
+        }
+    }
+
+    async fetchTacticsServer() {
         try {
             const url = `/api/tactics?window_min=${this.currentWindowMin}`;
             const res = await fetch(url);
+            if (!res.ok) throw new Error("Server response not ok");
             const data = await res.json();
             this.renderDashboard(data);
         } catch (e) {
-            console.error("Fetch tactics error:", e);
+            // If server offline, switch to static mode
+            this.isStaticMode = true;
+            await this.fetchStaticData();
         }
+    }
+
+    handleLocalFileUpload(e) {
+        const file = e.target.files[0];
+        if (!file) return;
+
+        const reader = new FileReader();
+        reader.onload = (event) => {
+            const text = event.target.result;
+            if (text && typeof TacticalWindClient !== 'undefined') {
+                this.activeFilename = file.name;
+                this.cachedRecords = TacticalWindClient.parseCSV(text);
+                try {
+                    localStorage.setItem('windcoach_csv_cache', text);
+                    localStorage.setItem('windcoach_active_file', file.name);
+                } catch (err) {}
+                const tactics = TacticalWindClient.calculateTactics(this.cachedRecords, this.currentWindowMin);
+                tactics.active_file = file.name;
+                this.renderDashboard(tactics);
+            }
+        };
+        reader.readAsText(file);
     }
 
     renderDashboard(d) {
         if (!d || !d.has_data) {
             const lbl = document.getElementById('active-file-label');
-            if (lbl) lbl.textContent = d.active_file || "Nessun dato";
+            if (lbl) lbl.textContent = d.active_file || "In attesa dati...";
             return;
         }
 
